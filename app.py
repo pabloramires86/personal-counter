@@ -126,6 +126,8 @@ today = browser_today()
 
 st.title("Meu Controle")
 st.caption("Receitas e despesas, organizadas sem complicação.")
+if st.session_state.get("delete_notice"):
+    st.success(st.session_state.pop("delete_notice"))
 
 current_month = today.strftime("%Y-%m")
 available_months = sorted(
@@ -190,6 +192,7 @@ with st.sidebar:
     st.caption(f"Armazenamento: **{backend_label}**")
 
 view = st.radio("Tela", ["Resumo", "Investimentos"], horizontal=True)
+
 if view == "Investimentos":
     st.subheader("Investimentos")
 
@@ -292,6 +295,7 @@ if view == "Investimentos":
                 key="delete-investments-button",
             ):
                 store.delete_investments(selected_investment_ids)
+                st.session_state["delete_notice"] = "Investimentos selecionados removidos."
                 st.rerun()
 
     st.stop()
@@ -386,7 +390,7 @@ with right:
             mime="text/csv",
         )
 
-with st.expander("Remover lançamentos de teste"):
+with st.expander("Excluir receitas e despesas de teste"):
     if transactions.empty:
         st.info("Não há lançamentos para remover.")
     else:
@@ -415,4 +419,5 @@ with st.expander("Remover lançamentos de teste"):
             key="delete-transactions-button",
         ):
             store.delete_transactions(selected_transaction_ids)
+            st.session_state["delete_notice"] = "Lançamentos selecionados removidos."
             st.rerun()
