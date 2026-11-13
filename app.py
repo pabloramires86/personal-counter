@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 import streamlit as st
@@ -91,6 +92,33 @@ def money(value: float) -> str:
     formatted = f"R$ {value:,.2f}"
     return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
 
+def format_amount(value: float | Decimal) -> str:
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def parse_amount(text: str) -> Decimal:
+    value = text.strip().replace("R$", "").replace(" ", "")
+
+    if not value:
+        raise ValueError("Informe um valor.")
+
+    if "," in value and "." in value:
+        if value.rfind(",") > value.rfind("."):
+            value = value.replace(".", "").replace(",", ".")  # 1.234,56
+        else:
+            value = value.replace(",", "")  # 1,234.56
+    else:
+        value = value.replace(",", ".")  # 55,99 ou 55.99
+
+    try:
+        amount = Decimal(value)
+    except InvalidOperation as error:
+        raise ValueError("Digite um valor válido, como 55,99.") from error
+
+    if not amount.is_finite():
+        raise ValueError("Digite um valor válido, como 55,99.")
+
+    return amount
+
 
 store = get_store()
 transactions = store.list_transactions()
@@ -111,23 +139,29 @@ with st.sidebar:
     st.subheader("Novo lançamento")
     initial_balance = store.get_initial_balance()
     with st.form("initial-balance-form"):
-        starting_amount = st.number_input(
+        starting_amount_text = st.text_input(
             "Valor que já tenho guardado",
-            min_value=0.0,
-            value=initial_balance or 0.0,
-            step=50.0,
-            format="%.2f",
+            value=format_amount(
+                initial_balance if initial_balance is not None else 0
+            )
         )
         save_balance = st.form_submit_button("Salvar saldo inicial")
     if save_balance:
-        store.set_initial_balance(float(starting_amount))
-        st.success("Saldo inicial salvo.")
+        try:
+            starting_amount = parse_amount(starting_amount_text)
+            if starting_amount < 0:
+                raise ValueError("O saldo inicial não pode ser negativo.")
+            store.set_initial_balance(float(starting_amount))
+            st.success("Saldo inicial salvo.")
+        except ValueError as error:
+            st.error(str(error))
     with st.form("transaction-form", clear_on_submit=True):
         transaction_type = st.selectbox("Tipo", ["Despesa", "Receita"])
         transaction_date = st.date_input("Data", value=today, format="DD/MM/YYYY")
         category = st.selectbox("Categoria", CATEGORIES)
-        amount = st.number_input(
-            "Valor (R$)", min_value=0.01, value=None, step=1.0, format="%.2f"
+        amount_text = st.text_input(
+            "Valor (R$)",
+            placeholder="Ex.: 55,99",
         )
         description = st.text_input("Descrição", max_chars=120)
         submitted = st.form_submit_button(
@@ -135,18 +169,21 @@ with st.sidebar:
         )
 
     if submitted:
-        if amount is None or amount <= 0:
-            st.error("Informe um valor maior que zero.")
-        else:
+        try:
+            parsed_amount = parse_amount(amount_text)
+            if parsed_amount <= 0:
+                raise ValueError("O valor precisa ser maior que zero.")
+
             store.add_transaction(
                 transaction_date=transaction_date,
                 transaction_type=transaction_type,
                 category=category,
                 description=description.strip(),
-                amount=float(amount),
+                amount=float(parsed_amount),
             )
-            st.success("Lançamento salvo.")
             st.rerun()
+        except ValueError as error:
+            st.error(str(error))
 
     st.divider()
     backend_label = "Google Sheets" if store.is_cloud else "Este dispositivo (SQLite)"
@@ -161,23 +198,35 @@ if view == "Investimentos":
         investment_type = st.selectbox(
             "Tipo", ["CDB", "Tesouro Direto", "Ação", "Fundo", "Outro"]
         )
-        amount_invested = st.number_input(
-            "Valor aplicado (R$)", min_value=0.01, value=0.01, step=50.0
+        amount_invested_text = st.text_input(
+            "Valor aplicado (R$)", placeholder="Ex.: 1.000,00"
         )
-        current_value = st.number_input(
-            "Valor atual (R$)", min_value=0.0, value=0.0, step=50.0
+        current_value_text = st.text_input(
+            "Valor atual (R$)", placeholder="Ex.: 1.055,90"
         )
         add_clicked = st.form_submit_button("Adicionar investimento")
 
     if add_clicked:
-        if not name.strip():
-            st.error("Informe o nome do investimento.")
-        else:
+        try:
+            parsed_invested = parse_amount(amount_invested_text)
+            parsed_current = parse_amount(current_value_text)
+
+            if not name.strip():
+                raise ValueError("Informe o nome do investimento.")
+            if parsed_invested <= 0:
+                raise ValueError("O valor aplicado precisa ser maior que zero.")
+            if parsed_current < 0:
+                raise ValueError("O valor atual não pode ser negativo.")
+
             store.add_investment(
-                name.strip(), investment_type,
-                float(amount_invested), float(current_value)
+                name.strip(),
+                investment_type,
+                float(parsed_invested),
+                float(parsed_current),
             )
             st.rerun()
+        except ValueError as error:
+            st.error(str(error))
 
     investments = store.list_investments()
     if investments.empty:
@@ -204,16 +253,21 @@ if view == "Investimentos":
         )
         selected = investments.loc[investments["id"] == selected_id].iloc[0]
         with st.form("update-investment-form"):
-            new_value = st.number_input(
+            new_value_text = st.text_input(
                 "Novo valor atual (R$)",
-                min_value=0.0,
-                value=float(selected["current_value"]),
-                step=50.0,
+                value=format_amount(float(selected["current_value"])),
             )
             update_clicked = st.form_submit_button("Atualizar valor")
         if update_clicked:
-            store.update_investment_value(selected_id, float(new_value))
-            st.rerun()
+            try:
+                parsed_value = parse_amount(new_value_text)
+                if parsed_value < 0:
+                    raise ValueError("O valor atual não pode ser negativo.")
+
+                store.update_investment_value(selected_id, float(parsed_value))
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
 
     st.stop()
 
