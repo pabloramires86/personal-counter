@@ -269,6 +269,31 @@ if view == "Investimentos":
             except ValueError as error:
                 st.error(str(error))
 
+        investment_labels = {
+            str(row["id"]): (
+                f"{row['name']} | aplicado {money(float(row['amount_invested']))}"
+            )
+            for _, row in investments.iterrows()
+        }
+        with st.expander("Remover investimentos de teste"):
+            selected_investment_ids = st.multiselect(
+                "Selecione os investimentos para remover",
+                options=list(investment_labels),
+                format_func=investment_labels.get,
+                key="investments-to-delete",
+            )
+            confirm_investment_delete = st.checkbox(
+                "Confirmo a remoção dos investimentos selecionados",
+                key="confirm-investment-delete",
+            )
+            if st.button(
+                "Remover investimentos selecionados",
+                disabled=not selected_investment_ids or not confirm_investment_delete,
+                key="delete-investments-button",
+            ):
+                store.delete_investments(selected_investment_ids)
+                st.rerun()
+
     st.stop()
 
 st.subheader("Resumo do mês")
@@ -360,3 +385,34 @@ with right:
             file_name=f"lancamentos-{selected_month}.csv",
             mime="text/csv",
         )
+
+with st.expander("Remover lançamentos de teste"):
+    if transactions.empty:
+        st.info("Não há lançamentos para remover.")
+    else:
+        transaction_labels = {
+            str(row["id"]): (
+                f"{pd.to_datetime(row['date']).strftime('%d/%m/%Y')} | "
+                f"{row['type']} | {row['category']} | "
+                f"{row['description'] or 'Sem descrição'} | "
+                f"{money(float(row['amount']))}"
+            )
+            for _, row in transactions.iterrows()
+        }
+        selected_transaction_ids = st.multiselect(
+            "Selecione os lançamentos para remover",
+            options=list(transaction_labels),
+            format_func=transaction_labels.get,
+            key="transactions-to-delete",
+        )
+        confirm_transaction_delete = st.checkbox(
+            "Confirmo a remoção dos lançamentos selecionados",
+            key="confirm-transaction-delete",
+        )
+        if st.button(
+            "Remover lançamentos selecionados",
+            disabled=not selected_transaction_ids or not confirm_transaction_delete,
+            key="delete-transactions-button",
+        ):
+            store.delete_transactions(selected_transaction_ids)
+            st.rerun()

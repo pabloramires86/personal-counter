@@ -118,6 +118,13 @@ class SQLiteStore:
                 connection,
             )
 
+    def delete_transactions(self, transaction_ids: list[str]) -> None:
+        with self._connect() as connection:
+            connection.executemany(
+                "DELETE FROM transactions WHERE id = ?",
+                ((transaction_id,) for transaction_id in transaction_ids),
+            )
+
     def get_initial_balance(self) -> float | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -137,6 +144,13 @@ class SQLiteStore:
         with self._connect() as connection:
             return pd.read_sql_query(
                 "SELECT * FROM investments ORDER BY name", connection
+            )
+
+    def delete_investments(self, investment_ids: list[str]) -> None:
+        with self._connect() as connection:
+            connection.executemany(
+                "DELETE FROM investments WHERE id = ?",
+                ((investment_id,) for investment_id in investment_ids),
             )
 
     def add_investment(
@@ -215,6 +229,17 @@ class GoogleSheetsStore:
         transactions["amount"] = pd.to_numeric(transactions["amount"], errors="coerce").fillna(0)
         return transactions
 
+    def delete_transactions(self, transaction_ids: list[str]) -> None:
+        selected_ids = {str(transaction_id) for transaction_id in transaction_ids}
+        records = self.worksheet.get_all_records()
+        rows = [
+            row
+            for row, record in enumerate(records, start=2)
+            if str(record.get("id")) in selected_ids
+        ]
+        for row in sorted(rows, reverse=True):
+            self.worksheet.delete_rows(row)
+
     def get_initial_balance(self) -> float | None:
         for record in self.config_worksheet.get_all_records():
             if record.get("key") == "initial_balance":
@@ -241,6 +266,17 @@ class GoogleSheetsStore:
                 investments[column], errors="coerce"
             ).fillna(0)
         return investments
+
+    def delete_investments(self, investment_ids: list[str]) -> None:
+        selected_ids = {str(investment_id) for investment_id in investment_ids}
+        records = self.investments_worksheet.get_all_records()
+        rows = [
+            row
+            for row, record in enumerate(records, start=2)
+            if str(record.get("id")) in selected_ids
+        ]
+        for row in sorted(rows, reverse=True):
+            self.investments_worksheet.delete_rows(row)
 
     def add_investment(
         self, name: str, investment_type: str,
