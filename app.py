@@ -285,24 +285,27 @@ if view == "Investimentos":
             for _, row in investments.iterrows()
         }
         with st.expander("Remover investimentos de teste"):
-            selected_investment_ids = st.multiselect(
-                "Selecione os investimentos para remover",
-                options=list(investment_labels),
-                format_func=investment_labels.get,
-                key="investments-to-delete",
-            )
-            confirm_investment_delete = st.checkbox(
-                "Confirmo a remoção dos investimentos selecionados",
-                key="confirm-investment-delete",
-            )
-            if st.button(
-                "Remover investimentos selecionados",
-                disabled=not selected_investment_ids or not confirm_investment_delete,
-                key="delete-investments-button",
-            ):
-                store.delete_investments(selected_investment_ids)
-                st.session_state["delete_notice"] = "Investimentos selecionados removidos."
-                st.rerun()
+            with st.form("delete-investments-form"):
+                selected_investment_ids = st.multiselect(
+                    "Selecione os investimentos para remover",
+                    options=list(investment_labels),
+                    format_func=investment_labels.get,
+                )
+                confirm_investment_delete = st.checkbox(
+                    "Confirmo a remoção dos investimentos selecionados"
+                )
+                delete_investments_clicked = st.form_submit_button(
+                    "Remover investimentos selecionados"
+                )
+            if delete_investments_clicked:
+                if not selected_investment_ids or not confirm_investment_delete:
+                    st.error("Selecione investimentos e confirme a remoção.")
+                else:
+                    store.delete_investments(selected_investment_ids)
+                    st.session_state["delete_notice"] = (
+                        f"{len(selected_investment_ids)} investimento(s) removido(s)."
+                    )
+                    st.rerun()
 
     st.stop()
 
@@ -409,21 +412,24 @@ with st.expander("Excluir receitas e despesas de teste"):
             )
             for _, row in transactions.iterrows()
         }
-        selected_transaction_ids = st.multiselect(
-            "Selecione os lançamentos para remover",
-            options=list(transaction_labels),
-            format_func=transaction_labels.get,
-            key="transactions-to-delete",
-        )
-        confirm_transaction_delete = st.checkbox(
-            "Confirmo a remoção dos lançamentos selecionados",
-            key="confirm-transaction-delete",
-        )
-        if st.button(
-            "Remover lançamentos selecionados",
-            disabled=not selected_transaction_ids or not confirm_transaction_delete,
-            key="delete-transactions-button",
-        ):
-            store.delete_transactions(selected_transaction_ids)
-            st.session_state["delete_notice"] = "Lançamentos selecionados removidos."
-            st.rerun()
+        with st.form("delete-transactions-form"):
+            selected_transaction_ids = st.multiselect(
+                "Selecione os lançamentos para remover",
+                options=list(transaction_labels),
+                format_func=transaction_labels.get,
+            )
+            confirm_transaction_delete = st.checkbox(
+                "Confirmo a remoção dos lançamentos selecionados"
+            )
+            delete_transactions_clicked = st.form_submit_button(
+                "Remover lançamentos selecionados"
+            )
+        if delete_transactions_clicked:
+            if not selected_transaction_ids or not confirm_transaction_delete:
+                st.error("Selecione lançamentos e confirme a remoção.")
+            else:
+                store.delete_transactions(selected_transaction_ids)
+                st.session_state["delete_notice"] = (
+                    f"{len(selected_transaction_ids)} lançamento(s) removido(s)."
+                )
+                st.rerun()

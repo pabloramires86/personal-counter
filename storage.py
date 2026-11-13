@@ -50,6 +50,14 @@ def open_worksheet(spreadsheet, title: str, headers: list[str]):
     return worksheet
 
 
+def read_worksheet_records(worksheet) -> list[dict[str, Any]]:
+    from gspread.utils import ValueRenderOption
+
+    return worksheet.get_all_records(
+        value_render_option=ValueRenderOption.unformatted
+    )
+
+
 def delete_worksheet_rows(
     worksheet, records: list[dict[str, Any]], selected_ids: list[str]
 ) -> None:
@@ -276,7 +284,7 @@ class GoogleSheetsStore:
         )
 
     def list_transactions(self) -> pd.DataFrame:
-        records: list[dict[str, Any]] = self.worksheet.get_all_records()
+        records = read_worksheet_records(self.worksheet)
         if not records:
             return pd.DataFrame(columns=HEADERS)
         transactions = pd.DataFrame(records)
@@ -284,17 +292,17 @@ class GoogleSheetsStore:
         return transactions
 
     def delete_transactions(self, transaction_ids: list[str]) -> None:
-        records = self.worksheet.get_all_records()
+        records = read_worksheet_records(self.worksheet)
         delete_worksheet_rows(self.worksheet, records, transaction_ids)
 
     def get_initial_balance(self) -> float | None:
-        for record in self.config_worksheet.get_all_records():
+        for record in read_worksheet_records(self.config_worksheet):
             if record.get("key") == "initial_balance":
                 return float(record["value"])
         return None
 
     def set_initial_balance(self, value: float) -> None:
-        records = self.config_worksheet.get_all_records()
+        records = read_worksheet_records(self.config_worksheet)
         for row, record in enumerate(records, start=2):
             if record.get("key") == "initial_balance":
                 self.config_worksheet.update(
@@ -306,7 +314,7 @@ class GoogleSheetsStore:
         )
 
     def list_investments(self) -> pd.DataFrame:
-        records = self.investments_worksheet.get_all_records()
+        records = read_worksheet_records(self.investments_worksheet)
         investments = pd.DataFrame(records, columns=INVESTMENT_HEADERS)
         for column in ("amount_invested", "current_value"):
             investments[column] = pd.to_numeric(
@@ -315,7 +323,7 @@ class GoogleSheetsStore:
         return investments
 
     def delete_investments(self, investment_ids: list[str]) -> None:
-        records = self.investments_worksheet.get_all_records()
+        records = read_worksheet_records(self.investments_worksheet)
         delete_worksheet_rows(
             self.investments_worksheet, records, investment_ids
         )
@@ -332,7 +340,7 @@ class GoogleSheetsStore:
     def update_investment_value(
         self, investment_id: str, current_value: float
     ) -> None:
-        records = self.investments_worksheet.get_all_records()
+        records = read_worksheet_records(self.investments_worksheet)
         for row, record in enumerate(records, start=2):
             if record.get("id") == investment_id:
                 self.investments_worksheet.update(
