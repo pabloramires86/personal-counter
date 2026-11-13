@@ -126,8 +126,10 @@ today = browser_today()
 
 st.title("Meu Controle")
 st.caption("Receitas e despesas, organizadas sem complicação.")
-if st.session_state.get("delete_notice"):
-    st.success(st.session_state.pop("delete_notice"))
+for notice_key in ("transaction_notice", "delete_notice"):
+    notice = st.session_state.pop(notice_key, None)
+    if notice:
+        st.success(notice)
 
 current_month = today.strftime("%Y-%m")
 available_months = sorted(
@@ -167,7 +169,7 @@ with st.sidebar:
         )
         description = st.text_input("Descrição", max_chars=120)
         submitted = st.form_submit_button(
-            "Adicionar lançamento", type="primary", use_container_width=True
+            "Adicionar lançamento", type="primary", width="stretch"
         )
 
     if submitted:
@@ -182,6 +184,10 @@ with st.sidebar:
                 category=category,
                 description=description.strip(),
                 amount=float(parsed_amount),
+            )
+            st.session_state["transaction_notice"] = (
+                f"{transaction_type} registrada: "
+                f"{money(float(parsed_amount))}."
             )
             st.rerun()
         except ValueError as error:
@@ -245,7 +251,7 @@ if view == "Investimentos":
             ),
             axis=1,
         )
-        st.dataframe(investments, hide_index=True, use_container_width=True)
+        st.dataframe(investments, hide_index=True, width="stretch")
 
         selected_id = st.selectbox(
             "Investimento para atualizar",
@@ -377,7 +383,7 @@ with right:
         )
         st.dataframe(
             display_transactions[["Data", "Tipo", "Categoria", "Descrição", "Valor"]],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         csv_data = month_transactions.drop(columns=["created_at"], errors="ignore").to_csv(

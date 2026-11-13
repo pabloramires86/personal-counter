@@ -49,6 +49,35 @@ def open_worksheet(spreadsheet, title: str, headers: list[str]):
 
     return worksheet
 
+
+def delete_worksheet_rows(
+    worksheet, records: list[dict[str, Any]], selected_ids: list[str]
+) -> None:
+    selected = {str(record_id) for record_id in selected_ids}
+    rows = [
+        row
+        for row, record in enumerate(records, start=2)
+        if str(record.get("id")) in selected
+    ]
+    if not rows:
+        return
+
+    requests = [
+        {
+            "deleteDimension": {
+                "range": {
+                    "sheetId": worksheet.id,
+                    "dimension": "ROWS",
+                    "startIndex": row - 1,
+                    "endIndex": row,
+                }
+            }
+        }
+        for row in sorted(rows, reverse=True)
+    ]
+    worksheet.spreadsheet.batch_update({"requests": requests})
+
+
 class SQLiteStore:
     is_cloud = False
 
@@ -139,6 +168,31 @@ class SQLiteStore:
                    ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
                 (value,),
             )
+    def delete_worksheet_rows(worksheet, records: list[dict[str, Any]], selected_ids: list[str]) -> None:
+        selected = {str(record_id) for record_id in selected_ids}
+        rows = [
+            row
+            for row, record in enumerate(records, start=2)
+            if str(record.get("id")) in selected
+        ]
+        if not rows:
+            return
+
+        requests = [
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "dimension": "ROWS",
+                        "startIndex": row - 1,
+                        "endIndex": row,
+                    }
+                }
+            }
+            for row in sorted(rows, reverse=True)
+        ]
+        worksheet.spreadsheet.batch_update({"requests": requests})
+
 
     def list_investments(self) -> pd.DataFrame:
         with self._connect() as connection:
@@ -230,15 +284,8 @@ class GoogleSheetsStore:
         return transactions
 
     def delete_transactions(self, transaction_ids: list[str]) -> None:
-        selected_ids = {str(transaction_id) for transaction_id in transaction_ids}
         records = self.worksheet.get_all_records()
-        rows = [
-            row
-            for row, record in enumerate(records, start=2)
-            if str(record.get("id")) in selected_ids
-        ]
-        for row in sorted(rows, reverse=True):
-            self.worksheet.delete_rows(row)
+        delete_worksheet_rows(self.worksheet, records, transaction_ids)
 
     def get_initial_balance(self) -> float | None:
         for record in self.config_worksheet.get_all_records():
@@ -268,15 +315,10 @@ class GoogleSheetsStore:
         return investments
 
     def delete_investments(self, investment_ids: list[str]) -> None:
-        selected_ids = {str(investment_id) for investment_id in investment_ids}
         records = self.investments_worksheet.get_all_records()
-        rows = [
-            row
-            for row, record in enumerate(records, start=2)
-            if str(record.get("id")) in selected_ids
-        ]
-        for row in sorted(rows, reverse=True):
-            self.investments_worksheet.delete_rows(row)
+        delete_worksheet_rows(
+            self.investments_worksheet, records, investment_ids
+        )
 
     def add_investment(
         self, name: str, investment_type: str,
