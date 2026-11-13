@@ -204,7 +204,7 @@ class GoogleSheetsStore:
                 amount,
                 datetime.now(timezone.utc).isoformat(),
             ],
-            value_input_option="USER_ENTERED",
+            value_input_option="RAW",
         )
 
     def list_transactions(self) -> pd.DataFrame:
@@ -225,9 +225,13 @@ class GoogleSheetsStore:
         records = self.config_worksheet.get_all_records()
         for row, record in enumerate(records, start=2):
             if record.get("key") == "initial_balance":
-                self.config_worksheet.update_cell(row, 2, value)
+                self.config_worksheet.update(
+                    [[value]], range_name=f"B{row}", raw=True
+                )
                 return
-        self.config_worksheet.append_row(["initial_balance", value])
+        self.config_worksheet.append_row(
+            ["initial_balance", value], value_input_option="RAW"
+        )
 
     def list_investments(self) -> pd.DataFrame:
         records = self.investments_worksheet.get_all_records()
@@ -245,7 +249,7 @@ class GoogleSheetsStore:
         self.investments_worksheet.append_row([
             str(uuid.uuid4()), name, investment_type, amount_invested,
             current_value, datetime.now(timezone.utc).isoformat(),
-        ])
+        ], value_input_option="RAW")
 
     def update_investment_value(
         self, investment_id: str, current_value: float
@@ -253,9 +257,10 @@ class GoogleSheetsStore:
         records = self.investments_worksheet.get_all_records()
         for row, record in enumerate(records, start=2):
             if record.get("id") == investment_id:
-                self.investments_worksheet.update_cell(row, 5, current_value)
-                self.investments_worksheet.update_cell(
-                    row, 6, datetime.now(timezone.utc).isoformat()
+                self.investments_worksheet.update(
+                    [[current_value, datetime.now(timezone.utc).isoformat()]],
+                    range_name=f"E{row}:F{row}",
+                    raw=True,
                 )
                 return
         raise ValueError("Investimento não encontrado.")
