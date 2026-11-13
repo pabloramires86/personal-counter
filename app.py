@@ -109,6 +109,19 @@ if current_month not in available_months:
 
 with st.sidebar:
     st.subheader("Novo lançamento")
+    initial_balance = store.get_initial_balance()
+    with st.form("initial-balance-form"):
+        starting_amount = st.number_input(
+            "Valor que já tenho guardado",
+            min_value=0.0,
+            value=initial_balance or 0.0,
+            step=50.0,
+            format="%.2f",
+        )
+        save_balance = st.form_submit_button("Salvar saldo inicial")
+    if save_balance:
+        store.set_initial_balance(float(starting_amount))
+        st.success("Saldo inicial salvo.")
     with st.form("transaction-form", clear_on_submit=True):
         transaction_type = st.selectbox("Tipo", ["Despesa", "Receita"])
         transaction_date = st.date_input("Data", value=today, format="DD/MM/YYYY")
@@ -139,6 +152,71 @@ with st.sidebar:
     backend_label = "Google Sheets" if store.is_cloud else "Este dispositivo (SQLite)"
     st.caption(f"Armazenamento: **{backend_label}**")
 
+view = st.radio("Tela", ["Resumo", "Investimentos"], horizontal=True)
+if view == "Investimentos":
+    st.subheader("Investimentos")
+
+    with st.form("investment-form", clear_on_submit=True):
+        name = st.text_input("Nome do investimento")
+        investment_type = st.selectbox(
+            "Tipo", ["CDB", "Tesouro Direto", "Ação", "Fundo", "Outro"]
+        )
+        amount_invested = st.number_input(
+            "Valor aplicado (R$)", min_value=0.01, value=0.01, step=50.0
+        )
+        current_value = st.number_input(
+            "Valor atual (R$)", min_value=0.0, value=0.0, step=50.0
+        )
+        add_clicked = st.form_submit_button("Adicionar investimento")
+
+    if add_clicked:
+        if not name.strip():
+            st.error("Informe o nome do investimento.")
+        else:
+            store.add_investment(
+                name.strip(), investment_type,
+                float(amount_invested), float(current_value)
+            )
+            st.rerun()
+
+    investments = store.list_investments()
+    if investments.empty:
+        st.info("Nenhum investimento cadastrado.")
+    else:
+        investments["Rendimento"] = (
+            investments["current_value"] - investments["amount_invested"]
+        )
+        investments["Rendimento (%)"] = investments.apply(
+            lambda row: (
+                row["Rendimento"] / row["amount_invested"] * 100
+                if row["amount_invested"] > 0 else 0
+            ),
+            axis=1,
+        )
+        st.dataframe(investments, hide_index=True, use_container_width=True)
+
+        selected_id = st.selectbox(
+            "Investimento para atualizar",
+            investments["id"].tolist(),
+            format_func=lambda value: investments.loc[
+                investments["id"] == value, "name"
+            ].iloc[0],
+        )
+        selected = investments.loc[investments["id"] == selected_id].iloc[0]
+        with st.form("update-investment-form"):
+            new_value = st.number_input(
+                "Novo valor atual (R$)",
+                min_value=0.0,
+                value=float(selected["current_value"]),
+                step=50.0,
+            )
+            update_clicked = st.form_submit_button("Atualizar valor")
+        if update_clicked:
+            store.update_investment_value(selected_id, float(new_value))
+            st.rerun()
+
+    st.stop()
+
 st.subheader("Resumo do mês")
 selected_month = st.selectbox(
     "Mês",
@@ -162,12 +240,22 @@ income_total = float(
 expense_total = float(
     month_transactions.loc[month_transactions["type"] == "Despesa", "amount"].sum()
 ) if not month_transactions.empty else 0.0
-balance = income_total - expense_total
+total_income = float(
+    transactions.loc[transactions["type"] == "Receita", "amount"].sum()
+) if not transactions.empty else 0.0
+total_expense = float(
+    transactions.loc[transactions["type"] == "Despesa", "amount"].sum()
+) if not transactions.empty else 0.0
 
-metric_income, metric_expense, metric_balance = st.columns(3)
-metric_income.metric("Ganhos", money(income_total))
-metric_expense.metric("Gastos", money(expense_total))
-metric_balance.metric("Saldo", money(balance))
+initial_balance = store.get_initial_balance() or 0.0
+available_balance = initial_balance + total_income - total_expense
+month_result = income_total - expense_total
+
+metric_income, metric_expense, metric_result, metric_balance = st.columns(4)
+metric_income.metric("Ganhos no mês", money(income_total))
+metric_expense.metric("Gastos no mês", money(expense_total))
+metric_result.metric("Resultado do mês", money(month_result))
+metric_balance.metric("Saldo disponível", money(available_balance))
 
 left, right = st.columns([1, 1.5], gap="large")
 with left:
